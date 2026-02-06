@@ -927,11 +927,26 @@ def make_alpha(pokemon)
   if rand(15) < 1
     pokemon.item = customitems[0]
   end
+  learnable_moves = pokemon.getMoveList
+  learnable_moves += pokemon.getMoveRelearnerList
+  learnable_moves += pokemon.getEventMoveList
+  species = pokemon.species_data
+
+  species.get_evolutions(true).each do |evo|
+    # [new_species, method, parameter, boolean]
+
+    next if evo[3] # Prevolution
+    poke = Pokemon.new(evo[0],100)
+    learnable_moves += poke.getMoveList
+    learnable_moves += poke.getMoveRelearnerList
+    learnable_moves += poke.getEventMoveList
+  end
+  echoln learnable_moves.inspect
   move_list = ALL_MOVES.clone
   move_list.shuffle!
-  blacklisted_moves = [:GROWL,:TACKLE,:LEER,:STRINGSHOT,:SCRATCH,:HEALPULSE,:EERIEIMPULSE,:SPLASH,:SWALLOW,:TAILWHIP,:REFLECTTYPE,:RECYCLE,:REFRESH,:SAFEGUARD,:SLEEPTALK,:LUCKYCHANT,:MEFIRST,:EXPLOSION,:SELFDESTRUCT,:HELPINGHAND,:MIRRORMOVE,:COPYCAT,:TRANSFORM,:METRONOME,:HARDEN,:SPOTLIGHT,:LASTRESORT,:PERISHSONG,:AFTERYOU,:ASSIST,:DESTINYBOND]
-  moves = move_list.select { |key, _| key == pokemon.type1 and !pokemon.getMoveList.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
-  moves += move_list.select { |key, _| key == pokemon.type2 and !pokemon.getMoveList.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
+  blacklisted_moves = [:GROWL,:TACKLE,:LEER,:STRINGSHOT,:SCRATCH,:HEALPULSE,:EERIEIMPULSE,:SPLASH,:SWALLOW,:TAILWHIP,:REFLECTTYPE,:RECYCLE,:REFRESH,:SAFEGUARD,:SLEEPTALK,:LUCKYCHANT,:MEFIRST,:EXPLOSION,:SELFDESTRUCT,:HELPINGHAND,:MIRRORMOVE,:COPYCAT,:TRANSFORM,:METRONOME,:HARDEN,:SPOTLIGHT,:LASTRESORT,:PERISHSONG,:AFTERYOU,:ASSIST,:DESTINYBOND,:FORESIGHT,:SPITUP]
+  moves = move_list.select { |key, _| key == pokemon.type1 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
+  moves += move_list.select { |key, _| key == pokemon.type2 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
   moves.shuffle!
   if pokemon.moves.size() == 4
     pokemon.moves[0] = Pokemon::Move.new(moves[0][1])
@@ -939,8 +954,8 @@ def make_alpha(pokemon)
     pokemon.moves.push(Pokemon::Move.new(moves[0][1]))
   end
   if rand(30) < 1
-    moves = move_list.select { |key, _| key == pokemon.type1 and !pokemon.getMoveList.include?(_) and !pokemon.moves.include?(_)}[0, 3]
-    moves += move_list.select { |key, _| key == pokemon.type2 and !pokemon.getMoveList.include?(_) and !pokemon.moves.include?(_)}[0, 3]
+    moves = move_list.select { |key, _| key == pokemon.type1 and !learnable_moves.include?(_) and !pokemon.moves.include?(_)}[0, 3]
+    moves += move_list.select { |key, _| key == pokemon.type2 and !learnable_moves.include?(_) and !pokemon.moves.include?(_)}[0, 3]
     moves.shuffle!
     if pokemon.moves.size() == 4
       pokemon.moves[rand(2) + 1] = Pokemon::Move.new(moves[0][1])
