@@ -941,20 +941,18 @@ def make_alpha(pokemon)
     learnable_moves += poke.getMoveRelearnerList
     learnable_moves += poke.getEventMoveList
   end
-  echoln learnable_moves.inspect
+
   move_list = ALL_MOVES.clone
   move_list.shuffle!
   blacklisted_moves = [
-  :GROWL, :TACKLE, :LEER, :STRINGSHOT, :SCRATCH, :HEALPULSE, :EERIEIMPULSE, :SPLASH, :SWALLOW, :TAILWHIP,
-  :REFLECTTYPE, :RECYCLE, :REFRESH, :SAFEGUARD, :SLEEPTALK, :LUCKYCHANT, :MEFIRST, :EXPLOSION, :SELFDESTRUCT,
-  :HELPINGHAND, :MIRRORMOVE, :COPYCAT, :TRANSFORM, :METRONOME, :HARDEN, :SPOTLIGHT, :LASTRESORT, :PERISHSONG,
-  :AFTERYOU, :ASSIST, :DESTINYBOND, :SPITUP, :FLING, :ELECTRIFY, :TRICKORTREAT, :TRICK, :SOAK, :BURNUP,
-  :FAINTATTACK, :HIDDENPOWER2, :TRIATTACK2, :FAKEMOVE,:EMBER,:ABSORB,:WATERGUN
-  
+    :GROWL, :TACKLE, :LEER, :STRINGSHOT, :SCRATCH, :HEALPULSE, :EERIEIMPULSE, :SPLASH, :SWALLOW, :TAILWHIP,
+    :REFLECTTYPE, :RECYCLE, :REFRESH, :SAFEGUARD, :SLEEPTALK, :LUCKYCHANT, :MEFIRST, :EXPLOSION, :SELFDESTRUCT,
+    :HELPINGHAND, :MIRRORMOVE, :COPYCAT, :TRANSFORM, :METRONOME, :HARDEN, :SPOTLIGHT, :LASTRESORT, :PERISHSONG,
+    :AFTERYOU, :ASSIST, :DESTINYBOND, :SPITUP, :FLING, :ELECTRIFY, :TRICKORTREAT, :TRICK, :SOAK, :BURNUP,
+    :FAINTATTACK, :HIDDENPOWER2, :TRIATTACK2, :FAKEMOVE,:EMBER,:ABSORB,:WATERGUN
+
   :FORESIGHT, :ODORSLEUTH, :FOLLOWME, :ALLYSWITCH, :POWERTRICK, :ROLEPLAY, :INSTRUCT, :GUARDSPLIT,
-  :POWERSPLIT, :GUARDSWAP, :MEDITATE
-
-
+    :POWERSPLIT, :GUARDSWAP, :MEDITATE]
   moves = move_list.select { |key, _| key == pokemon.type1 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
   moves += move_list.select { |key, _| key == pokemon.type2 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
   moves.shuffle!
