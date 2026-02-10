@@ -27,6 +27,25 @@ if defined?(ModSettingsMenu)
     description: "Chance to encounter an alpha pokemon (%)",
     category: "Encounters"
  })
+  ModSettingsMenu.register(:alpha_trainer, {
+                                                  name: "Trainer Alphas",
+                                                  type: :slider,
+                                                  default: 1,
+                                                  description: "Trainers can have alpha pokemon",
+                                                  category: "Encounters"
+                                                 })
+
+  ModSettingsMenu.register(:alpha_trainerchance, {
+                                                    name: "Trainer Alpha Pokemon Chance",
+                                                    type: :slider,
+                                                    min: 1,
+                                                    max: 100,
+                                                    interval: 1,
+                                                    default: 1,
+                                                    description: "Chance for a trainer's pokemon to become an alpha pokemon (%)",
+                                                    category: "Encounters"
+                                                   })
+
   echoln "Loaded Alpha Pokemon Settings"
 end
 
@@ -106,9 +125,7 @@ def pbWildBattleCore(*args)
       # Max 3 items
 
 
-      if rand(100) < 1
-        pokemon.shiny = true
-      end
+
     end
   end
   echoln foeParty.inspect
@@ -180,7 +197,137 @@ def pbWildBattleCore(*args)
   $PokemonTemp.battleRewards = nil
   return decision
 end
+def pbTrainerBattleCore(*args)
+  outcomeVar = $PokemonTemp.battleRules["outcomeVar"] || 1
+  canLose    = $PokemonTemp.battleRules["canLose"] || false
+  # Skip battle if the player has no able Pokémon, or if holding Ctrl in Debug mode
+  if $Trainer.able_pokemon_count == 0 || ($DEBUG && Input.press?(Input::CTRL))
+    pbMessage(_INTL("SKIPPING BATTLE...")) if $DEBUG
+    pbMessage(_INTL("AFTER WINNING...")) if $DEBUG && $Trainer.able_pokemon_count > 0
+    pbSet(outcomeVar,($Trainer.able_pokemon_count == 0) ? 0 : 1)   # Treat it as undecided/a win
+    $PokemonTemp.clearBattleRules
+    $PokemonGlobal.nextBattleBGM       = nil
+    $PokemonGlobal.nextBattleME        = nil
+    $PokemonGlobal.nextBattleCaptureME = nil
+    $PokemonGlobal.nextBattleBack      = nil
+    $PokemonTemp.forced_alt_sprites=nil
+    pbMEStop
+    return ($Trainer.able_pokemon_count == 0) ? 0 : 1   # Treat it as undecided/a win
+  end
+  $PokemonSystem.is_in_battle = true
+  # Record information about party Pokémon to be used at the end of battle (e.g.
+  # comparing levels for an evolution check)
+  Events.onStartBattle.trigger(nil)
+  # Generate trainers and their parties based on the arguments given
+  foeTrainers    = []
+  foeItems       = []
+  foeEndSpeeches = []
+  foeParty       = []
+  foePartyStarts = []
+  for arg in args
+    if arg.is_a?(NPCTrainer)
+      foeTrainers.push(arg)
+      foePartyStarts.push(foeParty.length)
+      arg.party.each { |pkmn| foeParty.push(pkmn) }
+      foeEndSpeeches.push(arg.lose_text)
+      foeItems.push(arg.items)
+    elsif arg.is_a?(Array)   # [trainer type, trainer name, ID, speech (optional)]
+      trainer = pbLoadTrainer(arg[0],arg[1],arg[2])
+      if !trainer && $game_switches[SWITCH_MODERN_MODE] #retry without modern mode
+        $game_switches[SWITCH_MODERN_MODE]=false
+        trainer = pbLoadTrainer(arg[0],arg[1],arg[2])
+        $game_switches[SWITCH_MODERN_MODE]=true
+      end
 
+      pbMissingTrainer(arg[0],arg[1],arg[2]) if !trainer
+      return 0 if !trainer
+
+      #infinite fusion edit
+      name_override = arg[4]
+      type_override = arg[5]
+      if type_override != nil
+        trainer.trainer_type = type_override
+      end
+      if name_override != nil
+        trainer.name = name_override
+      end
+      #####
+      Events.onTrainerPartyLoad.trigger(nil,trainer)
+      foeTrainers.push(trainer)
+      foePartyStarts.push(foeParty.length)
+      trainer.party.each { |pkmn| foeParty.push(pkmn) }
+      foeEndSpeeches.push(arg[3] || trainer.lose_text)
+      foeItems.push(trainer.items)
+    else
+      raise _INTL("Expected NPCTrainer or array of trainer data, got {1}.", arg)
+    end
+  end
+  alpha_count = 0
+  alpha_enabled = defined?(ModSettingsMenu) ? (ModSettingsMenu.get(:alpha_trainer) || 0) : 0
+  alpha_chance = defined?(ModSettingsMenu) ? (ModSettingsMenu.get(:alpha_trainerchance) || 1) : 1
+  for pokemon in foeParty
+    alpha = false
+
+    if rand(100) < alpha_chance and alpha_enabled == 1
+      alpha= true
+      alpha_count += 1
+      alpha_chance  /= 2
+    end
+    if alpha == true
+      make_alpha(pokemon,1.2)
+    end
+  end
+  # Calculate who the player trainer(s) and their party are
+  playerTrainers    = [$Trainer]
+  playerParty       = $Trainer.party
+  playerPartyStarts = [0]
+  room_for_partner = (foeParty.length > 1)
+  if !room_for_partner && $PokemonTemp.battleRules["size"] &&
+     !["single", "1v1", "1v2", "1v3"].include?($PokemonTemp.battleRules["size"])
+    room_for_partner = true
+  end
+  if $PokemonGlobal.partner && !$PokemonTemp.battleRules["noPartner"] && room_for_partner
+    ally = NPCTrainer.new($PokemonGlobal.partner[1], $PokemonGlobal.partner[0])
+    ally.id    = $PokemonGlobal.partner[2]
+    ally.party = $PokemonGlobal.partner[3]
+    playerTrainers.push(ally)
+    playerParty = []
+    $Trainer.party.each { |pkmn| playerParty.push(pkmn) }
+    playerPartyStarts.push(playerParty.length)
+    ally.party.each { |pkmn| playerParty.push(pkmn) }
+    setBattleRule("double") if !$PokemonTemp.battleRules["size"]
+  end
+  # Create the battle scene (the visual side of it)
+  scene = pbNewBattleScene
+  # Create the battle class (the mechanics side of it)
+  battle = PokeBattle_Battle.new(scene,playerParty,foeParty,playerTrainers,foeTrainers)
+  battle.party1starts = playerPartyStarts
+  battle.party2starts = foePartyStarts
+  battle.items        = foeItems
+  battle.endSpeeches  = foeEndSpeeches
+  # Set various other properties in the battle class
+  pbPrepareBattle(battle)
+  $PokemonTemp.clearBattleRules
+  # End the trainer intro music
+  Audio.me_stop
+  # Perform the battle itself
+  decision = 0
+  pbBattleAnimation(pbGetTrainerBattleBGM(foeTrainers),(battle.singleBattle?) ? 1 : 3,foeTrainers) {
+    pbSceneStandby {
+                    decision = battle.pbStartBattle
+                   }
+  pbAfterBattle(decision,canLose)
+  }
+  Input.update
+  # Save the result of the battle in a Game Variable (1 by default)
+  #    0 - Undecided or aborted
+  #    1 - Player won
+  #    2 - Player lost
+  #    3 - Player or wild Pokémon ran from battle, or player forfeited the match
+  #    5 - Draw
+  pbSet(outcomeVar,decision)
+  return decision
+end
 # alpha icon ---
 class PokemonDataBox < SpriteWrapper
   def refresh
@@ -902,13 +1049,16 @@ ALL_MOVES =
   [:WATER, :WHIRLPOOL], [:WATER, :WATERSHURIKEN], [:WATER, :AQUARING], [:WATER, :RAINDANCE], [:WATER, :SOAK], [:WATER, :WATERSPORT], [:WATER, :WITHDRAW], [:DARK, :FAINTATTACK], [:NORMAL, :HIDDENPOWER2], [:NORMAL, :TRIATTACK2], [:QMARKS, :FAKEMOVE]]
 
 
-def make_alpha(pokemon)
+def make_alpha(pokemon,level_multi = 1.5)
 
   return if pokemon == nil
 
 
   return if pokemon.alpha? == true
-  pokemon.level = ((pokemon.level * 2) + 5).clamp(1, 100).round
+  player_highest_level = 1
+    $Trainer.party.each { |pkmn| player_highest_level = pkmn.level if pkmn.level > player_highest_level }
+
+  pokemon.level = ((pokemon.level * level_multi) + (5)  ).clamp(1 + (player_highest_level * 0.8), 100).round
   # pokemon.name += " A"
   ivs = pokemon.iv
   firstiv = ivs.keys.sample
@@ -932,6 +1082,20 @@ def make_alpha(pokemon)
   learnable_moves += pokemon.getEventMoveList
   species = pokemon.species_data
 
+  if rand(100) < 1
+    pokemon.shiny = true
+  end
+  if pokemon.shiny?
+    if defined?(PokemonFamilyConfig::FAMILY_SYSTEM_ENABLED)
+      if rand(50) < 1 and PokemonFamilyConfig::FAMILY_SYSTEM_ENABLED == true and pokemon.family == false
+      # Deterministic weighted family selection using personalID
+      pokemon.family = select_weighted_family(pkmn.personalID)
+      # Deterministic weighted subfamily selection
+      pokemon.subfamily = select_weighted_subfamily(pkmn.family, pkmn.personalID)
+      pokemon.family_assigned_at = Time.now.to_i
+    end
+    end
+  end
   species.get_evolutions(true).each do |evo|
     # [new_species, method, parameter, boolean]
 
@@ -949,9 +1113,9 @@ def make_alpha(pokemon)
     :REFLECTTYPE, :RECYCLE, :REFRESH, :SAFEGUARD, :SLEEPTALK, :LUCKYCHANT, :MEFIRST, :EXPLOSION, :SELFDESTRUCT,
     :HELPINGHAND, :MIRRORMOVE, :COPYCAT, :TRANSFORM, :METRONOME, :HARDEN, :SPOTLIGHT, :LASTRESORT, :PERISHSONG,
     :AFTERYOU, :ASSIST, :DESTINYBOND, :SPITUP, :FLING, :ELECTRIFY, :TRICKORTREAT, :TRICK, :SOAK, :BURNUP,
-    :FAINTATTACK, :HIDDENPOWER2, :TRIATTACK2, :FAKEMOVE,:EMBER,:ABSORB,:WATERGUN
+    :FAINTATTACK, :HIDDENPOWER2, :TRIATTACK2, :FAKEMOVE,:EMBER,:ABSORB,:WATERGUN,
 
-  :FORESIGHT, :ODORSLEUTH, :FOLLOWME, :ALLYSWITCH, :POWERTRICK, :ROLEPLAY, :INSTRUCT, :GUARDSPLIT,
+    :FORESIGHT, :ODORSLEUTH, :FOLLOWME, :ALLYSWITCH, :POWERTRICK, :ROLEPLAY, :INSTRUCT, :GUARDSPLIT,
     :POWERSPLIT, :GUARDSWAP, :MEDITATE]
   moves = move_list.select { |key, _| key == pokemon.type1 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
   moves += move_list.select { |key, _| key == pokemon.type2 and !learnable_moves.include?(_) and !pokemon.moves.include?(_) and !blacklisted_moves.include?(_)}[0, 3]
