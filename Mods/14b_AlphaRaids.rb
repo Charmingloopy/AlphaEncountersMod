@@ -29,10 +29,10 @@ if defined?(ModSettingsMenu)
  })
   ModSettingsMenu.register(:alpha_trainer, {
                                                   name: "Trainer Alphas",
-                                                  type: :slider,
+                                                  type: :toggle,
                                                   default: 1,
                                                   description: "Trainers can have alpha pokemon",
-                                                  category: "Encounters"
+                                                  category: "Difficulty"
                                                  })
 
   ModSettingsMenu.register(:alpha_trainerchance, {
@@ -43,7 +43,7 @@ if defined?(ModSettingsMenu)
                                                     interval: 1,
                                                     default: 1,
                                                     description: "Chance for a trainer's pokemon to become an alpha pokemon (%)",
-                                                    category: "Encounters"
+                                                    category: "Difficulty"
                                                    })
 
   echoln "Loaded Alpha Pokemon Settings"
